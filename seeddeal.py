@@ -41,16 +41,19 @@ def filter_fix(urls):
     return ls
 
 def filter1():
-    f = open('./seeds1239k.txt').read()
+    f = open('./okinwrong.txt').read()
     urls = f.strip().split('\n')
-    print "org wrong: %d" % len(urls)
+    #print "org wrong: %d" % len(urls)
 
 
     ret = filter.filter_urls('www.baidu.com', urls)
-    print "ret: %d" % len(ret)
+    #print "ret: %d" % len(ret)
     ret = filter_fix(ret)
-    print len(ret)
+    for url in ret:
+        print url
+    
 
+    return
     f = "seed995k.txt"
     fp = open(f, 'w')
     for url in ret:
@@ -58,14 +61,12 @@ def filter1():
     fp.close()
 
 
-
-
 def filterdone():
     # filter from above and continue filter with done_site.bin
     #
     cnt = 0
     print 
-    urls = open('seeds995k.txt').read().strip().split('\n')
+    urls = open('okinwrong.txt').read().strip().split('\n')
     
     for url in urls:
         url = url[7:]
@@ -74,4 +75,4 @@ def filterdone():
 
     print cnt
 
-filterdone()    
+filterdone()
