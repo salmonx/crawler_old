@@ -13,6 +13,20 @@ except:
     #bfdone.clear_all()
 
 
+
+
+f = open('done_urls.txt').read().strip().split('\n')
+cnt = 0
+for u in f:
+    if not u in bfdone:
+        bfdone.add(u)
+        cnt += 1
+print cnt, len(f)
+
+
+
+exit(0)
+
 # here we got id in each db increase from 1 to n, rather than sequencely for all db
 cmd = "select id from mainpages"
 

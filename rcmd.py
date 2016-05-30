@@ -19,14 +19,16 @@ def execcmd(cmd):
     for ip in ips:
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh.connect(ip,22,username,password,timeout=5)
+        try:
+            ssh.connect(ip,22,username,password,timeout=5)
 
-        print "################################  %15s  ################################## " % ip 
-        stdin, stdout, stderr = ssh.exec_command(cmd)
-        print cmd
-        print stdout.read().strip()
-        ssh.close()
-
+            print "################################  %15s  ################################## " % ip 
+            stdin, stdout, stderr = ssh.exec_command(cmd)
+            print cmd
+            print stdout.read().strip()
+            ssh.close()
+        except:
+            print ip, cmd
 
 def main():
 

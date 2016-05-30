@@ -2,17 +2,30 @@
 
 from redis_inc import RedisConnection, RedisQueueConnection
 
-runque = RedisQueueConnection('extracturls').conn
 
-size = runque.qsize()
-print size
+from time import time
 
-if size == 0:
+def test():
+    runque = RedisQueueConnection('extracturls').conn
+    i = 0
+
+    de = RedisQueueConnection('running').conn
+    de.flushdb()
+
     f = open('seeds995k.txt')
-    for c in f:
-        url = c.strip()
-        runque.put(url)
 
+    size = runque.qsize()
+    print size
+    
+    urls = f.read().strip().split('\n')
+    
+    if size == 0:
+        i = 0 
+        st = time()
+        for url in urls:
+            runque.put(url)
+
+test()
 
 exit(0)
 import redis
@@ -27,10 +40,6 @@ from RedisQueue import RedisQueue
 # 
 #
 # store the website
-# dbname with ip?
-#   
-# sitedata_2nd_
-#
 #
 # 
 # db = dbd['runque']

@@ -24,7 +24,7 @@ def filter_fix(urls):
             for c in chars:
                 if not c in "/.abcdefghijklmnopqrstuvwxyz0123456789-_[]:":    # this can speed up if order by frequence
                     ic = ord(c)
-                    if ic < 0x4e00 or ic > 0x9fa5: # not chinese chars
+                    if ic < 0x4e00 or ic > 0x9fa5: # besides the normal format url, we only allow chinese url
                         #print url
                         _continue = True
                         break
@@ -39,6 +39,8 @@ def filter_fix(urls):
         ls.add( url )
     
     return ls
+
+
 
 def filter1():
     f = open('./okinwrong.txt').read()

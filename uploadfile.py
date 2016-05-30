@@ -22,13 +22,14 @@ def usage():
 def upload(lf, rd):
     if os.path.isfile(lf):
         fname = os.path.basename(lf)
+        fpath = os.path.abspath(lf)
         for ip in ips:
             ssh = paramiko.Transport((ip, 22))
             #ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             ssh.connect(username=username,password=password)
             sftp = paramiko.SFTPClient.from_transport(ssh)
             out("################################  %s  ################################## " % ip)
-            sftp.put(fname,rd + os.path.sep + fname)
+            sftp.put(fpath,rd + os.path.sep + fname)
             out("[OK] upload %s success " %  fname)
                 
             sftp.close()

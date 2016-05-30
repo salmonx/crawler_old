@@ -15,6 +15,8 @@ class RedisConfig():
         self.dbd['running'] = 1
         self.dbd['extracturls'] = 2
         self.dbd['dns'] = 3
+        
+        self.dbd['scan'] = 4
 
         self.dbd['test'] = 9
 

@@ -17,10 +17,6 @@ from time import time,sleep
 
 ThreadRunning = True
 
-def exit_handler(signal, frame):
-    print "You press Ctrl + C"
-    ThreadRunning = False
-signal.signal(signal.SIGINT, exit_handler)
 
 
 s = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
@@ -30,10 +26,7 @@ cur = 0
 s.settimeout(0.1)
 
 done_sites_fname='done_sites.bin'
-if os.path.isfile(done_sites_fname):
-    bfdone = BloomFilter.open(done_sites_fname)
-else:
-    bfdone = BloomFilter(2**23, 10**(-5), done_sites_fname) #8M 
+bfdone = BloomFilter.open(done_sites_fname)
 
 
 urlsque = RedisQueueConnection('extracturls').conn
@@ -47,7 +40,7 @@ querysuc  = 0
 
 serverips = ['127.0.0.1']
 MAX_RUNNING_COUNT = 2**18 #  2**19 = 524 288
-MAX_QPS           = 100  # 700+ 
+MAX_QPS           = 200  # 700+ 
 
 dns_server_died = False
 
@@ -98,13 +91,9 @@ def handle_request(s):
             left =urlsque.qsize()
             running = runque.qsize()
             
-            if querysent % 100 == 0:
-                print "SEND: %7d \t SUCCESS: %7d \t URLS LEFT: %10d \t RUNNING: %10d SPEED: %6d"\
-                     % (querysent, querysuc, left, running, querysent/int((time()-st)) )
 
             if running > MAX_RUNNING_COUNT:
                 print "running queue too big: %d" % (running)
-                print 
                 sleep(60)
 
             url = urlsque.get() 
@@ -132,13 +121,18 @@ def handle_request(s):
             sleep(1.0 / MAX_QPS)
             querysent += 1
 
+            if querysent % 100 == 0:
+                 print "SEND: %7d \t SUCCESS: %7d \t URLS LEFT: %10d \t RUNNING: %10d SPEED: %6d"\
+                     % (querysent, querysuc, left, running, querysent/int((time()-st)) ) 
+
         print "All urls filter done.wait for new urls"
         sleep(60)
 
 
 def handle_response(s):
     global querysuc
-    s.settimeout(10)
+    s.settimeout(5)
+    st = time()
     while True:
         try:
             data,addr = s.recvfrom(8192)
@@ -153,24 +147,34 @@ def handle_response(s):
                 except Exception,e:
                     # server not found
                     pass
-        except Exception,e:
+
+        except KeyboardInterrupt:
+            if st == 0:
+                st = time()
+            et = time()
+
+            if et - st > 5 :
+                exit(0)
+            else:
+                continue 
+        except:
+            continue 
             #time out, Ctrl + C
-            if not ThreadRunning:
-                print "Exiting recieving"
-                return
 
 def main():
-    
-    
-    t2 = threading.Thread(target=(handle_request),args=(s,))
-    t2.start()
+    global ThreadRunning 
+    try:    
+        t2 = threading.Thread(target=(handle_request),args=(s,))
+        t2.start()
 
-    t1 = threading.Thread(target=(handle_response), args=(s,))
-    t1.start()
-
-    t1.join()
-    t2.join()
-
+        t1 = threading.Thread(target=(handle_response), args=(s,))
+        t1.start()
+           
+        t1.join()
+        t2.join()
+    except KeyboardInterrupt:
+        ThreadRunning = False
+        
 
 
 if __name__ == '__main__':
