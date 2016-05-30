@@ -46,8 +46,8 @@ class Crawler:
 
         self.httpget = self.httpget_requests # down method self.httpget_requests | httpget_curl
 
-        self.poolsize = 100
-        self.poolmaxfree = 20
+        self.poolsize = 500
+        self.poolmaxfree = 100
         self.freecount = 0
         self.down_pool = Pool(size=self.poolsize)
 

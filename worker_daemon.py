@@ -101,7 +101,7 @@ class Daemon:
             self.dbsize = 0
         else:
             print "Reuse the last db: ", lastname
-            self.dbsize = os.stat(lastname).st_size 
+            self.dbsize = os.stat(os.path.join(path, lastname)).st_size 
             
         return os.path.join(path, lastname)
 

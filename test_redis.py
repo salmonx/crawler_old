@@ -3,20 +3,26 @@
 from redis_inc import RedisConnection, RedisQueueConnection
 
 
-from time import time
+from time import time, sleep
 
 def test():
-    runque = RedisQueueConnection('extracturls').conn
-    i = 0
-
-    de = RedisQueueConnection('running').conn
-    de.flushdb()
-
-    f = open('seeds995k.txt')
+    runque = RedisQueueConnection('scan').conn
 
     size = runque.qsize()
     print size
-    
+    sleep(1)
+    cnt = 0
+    if size:
+        while cnt < size:
+            i = runque.get()
+            print i
+            runque.put(i)
+            cnt += 1
+
+    exit(0)
+
+    f = open('seeds995k.txt')
+
     urls = f.read().strip().split('\n')
     
     if size == 0:

@@ -7,7 +7,7 @@ import sys
 from redis_inc import RedisQueueConnection
 
 #input ip list for scan
-il = "chinaips.txt"
+il = "testips.txt"
 scancmd = "masscan -p%s -iL %s -oL %s --rate=500000"
 
 def calc(ip):

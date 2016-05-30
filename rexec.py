@@ -19,6 +19,9 @@ def usage():
 def out(con):
     print con
 
+def getpid(ssh, script):
+    sin,out,err = ssh.exec_command(" ps aux | grep '%s' | grep -v grep | cut -c 9-15 " % script)
+    return ssh.out.read()
 
 def worker(ip, lock, script):
     # execute the addhash script and print the result
@@ -32,24 +35,33 @@ def worker(ip, lock, script):
     cmd = "python %s" %  script
     lock.release()   
     
-    #stdin,stdout,stderr = ssh.exec_command(cmd)
-    s = ssh.invoke_shell()
-    time.sleep(1)
-    welcome = s.recv(2048)
-    cdcmd = "cd %s\n" %  scriptpath
-    s.send(cdcmd)
-    time.sleep(0.1) 
-    s.send(cmd + '\n')
-    buf = ""
-    while not buf.endswith('# '):
+    try:
+        #stdin,stdout,stderr = ssh.exec_command(cmd)
+        s = ssh.invoke_shell()
         time.sleep(1)
-        lock.acquire()
-        recv = s.recv(10240)
-        sys.stdout.write("\n%s\n\t%s" % (ip, recv))
-        lock.release()
-        buf += recv 
-    out('\n')
-
+        welcome = s.recv(2048)
+        cdcmd = "cd %s\n" %  scriptpath
+        s.send(cdcmd)
+        time.sleep(0.1) 
+        s.send(cmd + '\n')
+        buf = ""
+        STOP = False
+        while not buf.endswith('# ') and not STOP:
+            time.sleep(1)
+            lock.acquire()
+            recv = s.recv(10240)
+            sys.stdout.write("\n%s\n\t%s" % (ip, recv))
+            lock.release()
+            buf += recv 
+        out('\n')   
+    except KeyboardInterrupt:
+        STOP = True
+        pid = getpid(ssh)
+        print pid
+        exit(0) 
+        s.send("kill -INT %s" % pid)
+        s.close()
+        
 def main():
     global scriptpath
     script = sys.argv[1]
