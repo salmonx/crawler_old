@@ -10,35 +10,12 @@ import hashlib
 import time
 import re
 import Queue
-import redis
+from redis_inc import RedisQueueConnection
 
 #!!! db=1 use db1 to store the seeds
+r = RedisQueueConnection('test').conn
 
-r = redis.Redis(host='192.168.134.235',password='5#rFLwtg53&GzSjPbpb2', db=1)
-done_sites_fname='done_sites.bin'
-
-try:
-    bfdone = BloomFilter.open(done_sites_fname)
-except:
-    print "can not open file, create it"
-    bfdone = BloomFilter(2**23, 0.00001, done_sites_fname) #8M 
-    bfdone.clear_all()
-
-
-#first check the bf
-f = "urls_uniq.txt"
-urls = open(f).read().strip().split('\n')
-for url in urls:
-    if url in bfdone:
-        print "Error"
-        exit(0)
-
-print "BF is ok"
-
-# here we got id in each db increase from 1 to n, rather than sequencely for all db
 cmd = "select id from mainpages"
-
-pattern = re.compile(r'href=["\'](http://([^/?#\"\']+))',re.I)
 
 
 #worker is a singal process for each cpu on each computer
@@ -56,7 +33,7 @@ def worker(queue, lock, cpuid, outque):
         cur = conn.cursor()
         
 
-        cmd = "select content from mainpages where valid=1"
+        cmd = "select url from mainpages"
         cur.execute(cmd)	
         datalist = cur.fetchall()
 
@@ -65,14 +42,7 @@ def worker(queue, lock, cpuid, outque):
         hashlist = []
         for data in datalist:
             data = data[0]
-            #decompress the webpage content	
-            try:
-                con = zlib.decompress(data, zlib.MAX_WBITS|32)
-            except:
-                con = 'x' + str(data)
-                con = zlib.decompress(con)
             
-            urls = pattern.findall( con, re.I)
             for url in urls:
                 url = url[0].lower() # http://netloc  netloc
                 if not url in bfdone:
@@ -114,7 +84,7 @@ def getdbs(path):
         os.chdir(path)
         dblist = []
         for db in dbs:
-            if db.endswith('.db'):
+            if db.endswith('.db') and db.startswith('sitedata_2016'):
                 dblist.append(db)
         return dblist
 

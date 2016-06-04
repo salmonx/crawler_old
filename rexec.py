@@ -47,7 +47,7 @@ def worker(ip, lock, script):
         buf = ""
         STOP = False
         while not buf.endswith('# ') and not STOP:
-            time.sleep(1)
+            time.sleep(0.1)
             lock.acquire()
             recv = s.recv(10240)
             sys.stdout.write("\n%s\n\t%s" % (ip, recv))

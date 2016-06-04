@@ -71,15 +71,19 @@ def main():
     
     ipd = dict()
     for ip in ips:
-        h  = calc(ip)
+        iph  = calc(ip)
         ht = ip.split('.')[-1]
-        if h in ipd:
-            ipd[h].append(ht)
+        if iph in ipd:
+            ipd[iph].append(int(ht))
         else:
-            ipd[h] = [ht]
-    for h in ipd:
-        i = [port, h, ipd[h]]
-        item = pickle.dumps(i)
+            ipd[iph] = [int(ht)]
+    for iph in ipd:
+        
+        # pickle can not work well with redis
+        #item = pickle.dumps(i)
+        
+        ipl = str(ipd[iph]).replace(' ', '')
+        item  = "%s %s %s" % (port, iph, ipl)
         scanque.put(item)
     print "Insert into redis done "
     print "Total: %d" % (scanque.qsize())

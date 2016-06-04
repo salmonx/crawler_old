@@ -28,7 +28,7 @@ class Crawler:
 
     def __init__(self, done_que):
 
-        self.showpercounts = 10
+        self.showpercounts = 100
         self.timeout = 5
         self.starttime = time()
 
@@ -45,7 +45,7 @@ class Crawler:
 
         self.httpget = self.httpget_requests # down method self.httpget_requests | httpget_curl
 
-        self.poolsize = 20
+        self.poolsize = 100
         self.down_pool = Pool(size=self.poolsize)
 
         self.totalnettime = 0
@@ -67,7 +67,7 @@ class Crawler:
         data={'seed':seed,'headers':headers,'content':content}
         
         dat = cPickle.dumps(data)
-        self.done_que.put_nowait(dat)
+        #self.done_que.put_nowait(dat)
 
         #print "done", seed
         if self.done % self.showpercounts == 0:
@@ -93,8 +93,10 @@ class Crawler:
                     sleep(10)
                     continue
                 url = self.run_que.get()
+                self.run_que.put(url)
                 #self.down_pool.apply_cb(self.httpget, (url,), callback=self.cb_httpget)
                 # spawn is more fast?
+                #url = 'http://www.sdust.edu.cn'
                 self.down_pool.spawn(self.httpget, url)
                 self.done += 1
             except KeyboardInterrupt:
@@ -147,7 +149,7 @@ class Crawler:
         res = None
         done = False
         try:
-            with gevent.Timeout(6, False) as timeout:
+            with gevent.Timeout(3, False) as timeout:
                 #req.max_redirects = 2
                 res = requests.get(url, headers = headers )
                 con = res.content

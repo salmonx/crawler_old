@@ -16,7 +16,10 @@ import sys,signal
 from time import time,sleep
 
 ThreadRunning = True
-
+serverips = ['127.0.0.1']
+MAX_RUNNING_COUNT = 2**19 #  2**19 = 524 288
+MAX_QPS           = 100  # 700+ 
+showpercounts = 1000 #print out every when every 1000 querys sent
 
 
 s = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
@@ -38,10 +41,6 @@ querysuc  = 0
 
 #dnslocalserver = "dns_server_ip"
 
-serverips = ['127.0.0.1']
-MAX_RUNNING_COUNT = 2**18 #  2**19 = 524 288
-MAX_QPS           = 200  # 700+ 
-
 dns_server_died = False
 
 
@@ -58,9 +57,9 @@ def insert_redis(data):
     
     #add it to bfdone
     # return False if not exists in bfdone, added at same time
-    ret = bfdone.add(domain)
-    #insert into redis runque
-    if not ret:
+    if not domain in bfdone:
+        bfdone.add(domain)
+        #insert into redis runque
         cnt = runque.put(domain)
 
 def dns_server_check():
@@ -94,7 +93,7 @@ def handle_request(s):
 
             if running > MAX_RUNNING_COUNT:
                 print "running queue too big: %d" % (running)
-                sleep(60)
+                sleep(60*10)
 
             url = urlsque.get() 
             
@@ -102,7 +101,7 @@ def handle_request(s):
                 continue
 
             # "http://"
-            domain = url.strip('http://')
+            domain = url.split('http://')[-1]
             # user:pass@ftp://xxx
             ipdomain = domain.split(':')[0]
             try:
@@ -112,16 +111,27 @@ def handle_request(s):
                 continue
             except:
                 pass
-            
-            dnsr = dnslib.DNSRecord.question(domain)
-            packet = dnsr.pack()
-            # send each test domain to each dns server
-            for ip in serverips:
-                ret = s.sendto(packet, (ip, 53))
+           
+            try: 
+                # can not catch the exeception: DNSLabelError: Label component too long:\
+                #      'zhengfeng2012nianzhichengyingyukaoshixuexiruanjianzongheleiabcji1'
+
+                for item in url.split('.'):
+                    if len(item) > 64:
+                        print url
+                        continue
+                dnsr = dnslib.DNSRecord.question(domain)
+                packet = dnsr.pack()
+                # send each test domain to each dns server
+                for ip in serverips:
+                    ret = s.sendto(packet, (ip, 53))
+            except:
+                pass
+
             sleep(1.0 / MAX_QPS)
             querysent += 1
 
-            if querysent % 100 == 0:
+            if querysent %  showpercounts == 0:
                  print "SEND: %7d \t SUCCESS: %7d \t URLS LEFT: %10d \t RUNNING: %10d SPEED: %6d"\
                      % (querysent, querysuc, left, running, querysent/int((time()-st)) ) 
 
@@ -174,6 +184,9 @@ def main():
         t2.join()
     except KeyboardInterrupt:
         ThreadRunning = False
+        print "daemon_filter recv quit signal"
+        t1.stop()
+        t2.stop()
         
 
 

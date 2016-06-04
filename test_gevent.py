@@ -4,70 +4,55 @@ from gevent import monkey
 import sys
 from gevent.pool import Pool
 import requests
+from redis_inc import RedisQueueConnection
 
 monkey.patch_all(thread=False)
 
-import requests
 
-size = 1000
+
+
+size = 100
 
 pool = Pool(size)
 
-start = 50000
+runque = RedisQueueConnection('running').conn
+robotsque = RedisQueueConnection('robots').conn
 
-urls = open('seeds995k.txt').read().split('\n')[start:]
 
-#urls = ['http://www.sdust.edu.cn']*10000
 
 def httpget(url):
+    url = url + "/robots.txt"
+    con = ""
     try:
-        req = requests.get(url,timeout=(2,2))
-        con = req.content
-        req.close()
+        with gevent.Timeout(2) as timeout:
+            req = requests.get(url,timeout=(2,2))
+            con = req.content
+            #print url, len(con)
+            req.close()
         
     except:
         pass
-    #print len(con)
-
-import socket
-
-def socketget(url):
-    buf = ""
-    
-    try: 
-        host = url.split('http://')[-1] 
-        se=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-        se.connect((host,80))
-        se.send("GET / HTTP/1.1\n")
-        se.send("Accept:text/html,application/xhtml+xml,*/*;q=0.8\n")
-        #se.send("Accept-Encoding:gzip,deflate,sdch\n")
-        se.send("Accept-Language:zh-CN,zh;q=0.8,en;q=0.6\n")
-        se.send("Cache-Control:max-age=0\n")
-        se.send("Connection:keep-alive\n")
-        se.send("Host:"+host+"\r\n")
-        se.send("Referer:http://www.baidu.com/\n")
-        se.send("user-agent: Googlebot\n\n")
-        
-        while True:
-            buf = se.recv(1024)
-            if not len(buf):
-                break
-    except:
-        pass
-    print "len" , len(buf)
+    data =  (url, con)
+    cb(data)
+   
 
 from time import time
 
 
-#socketget('http://www.g.cn')
+def cb(data):
+    seed, con = data
+    #print "\t", seed, len(con)
 
-
+ 
 cnt = 0
 sst = time()
-for url in urls:
+while True:
+    url = runque.get()
+    runque.put(url)
     st = time()
-    pool.spawn(socketget,url)
+    pool.spawn(httpget, url)
     et = time()
     cnt += 1
 
-    print cnt / (et-sst) ,"%.2f" % ( et-st), url
+    if cnt % 10 == 0:
+        print cnt / (et-sst) ,runque.qsize(), robotsque.qsize()

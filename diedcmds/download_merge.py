@@ -31,7 +31,7 @@ def download(path, fn):
         ssh.connect(username=username,password=password)
         sftp = paramiko.SFTPClient.from_transport(ssh)
         out("################################  %s  ################################## " % ip)
-        nf = ip + SEP + fn
+        nf = ip + SEP + os.path.basename(fn)
         sftp.get(os.path.join(path, fn), nf)
         
         out("[OK] download: %s " %  nf)
@@ -41,9 +41,9 @@ def download(path, fn):
 def merge(fn):
     fl = []
     for ip in ips:
-        fl.append(ip + SEP + fn)
+        fl.append(ip + SEP + os.path.basename(fn))
     
-    mf = open(fn, 'w+')
+    mf = open(os.path.basename(fn), 'w+')
     for f in fl:
         con = open(f).read()
         mf.write(con)
@@ -58,7 +58,7 @@ if __name__ == '__main__':
         usage()
         exit()
     fn  = sys.argv[1]
-    path = "/work/do"
+    path = "/work/db"
     download(path,fn )
     merge(fn)
     

@@ -8,8 +8,6 @@ from time import sleep
 from redis_inc import RedisQueueConnection
 from worker_filter import Filter
 
-from requests import utils
-import multiprocessing as mp
 
 def getip():
     ip = ""
@@ -18,6 +16,27 @@ def getip():
     except:
         pass
     return ip
+
+def procdata_getencoding(seed,headers,content):
+
+    code = utils.get_encoding_from_headers(headers)
+    if code:
+        if code.lower() == 'gbk' or code.lower() == 'gb2312':
+            code = 'gbk'
+        elif code.lower() == 'utf-8':
+            code = 'utf-8'
+        else:# 'ISO-8859-1' and so on
+            code = None
+
+    if code == None:
+        code = utils.get_encodings_from_content(content)
+        print "unknown code",seed,code
+        if code:
+            code = code[0]
+            if code.lower() == 'gbk' or code.lower() == 'gb2312':
+                code = 'gbk'
+
+    return code
 
 
 class Daemon:
@@ -85,14 +104,10 @@ class Daemon:
         return os.path.join(path, lastname)
 
 
-    def geturls(self, seed, headers, content):
+    def geturls(self, seed, content):
         urls = []
         returls = []
-        if not content or len(content) == 0:
-            return []
-        #filter chinese pages
-        if not self.urlfilter.filter_encoding(seed, headers, content):
-            print seed
+        if not content  or len(content) == 0:
             return []
         try:
             urls = re.findall(self.urlfilter.urlpatern, content)
@@ -126,12 +141,9 @@ class Daemon:
                 content = data['content']
                 headers = str(data['headers'])
                 
-                urls = self.geturls(seed, data['headers'], content)
-               
-                if not len(urls):
-                    continue 
+                urls = self.geturls(seed, content)
+                
                 #put the extracted urls to urls_que
-                print "seed ex:", seed, len(urls)
                 for url in urls:
                     self.urls_que.put(url)
  

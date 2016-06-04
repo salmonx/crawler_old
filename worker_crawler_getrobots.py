@@ -1,8 +1,7 @@
 #coding:utf-8
 #!/usr/bin/evn python
-# modified 20160529
 # use multiprocess to run scrawler and damon parallel
-# 
+# used only to get robots.txt and then insert back to redis:
 
 import requests
 from requests.exceptions import ConnectionError
@@ -19,14 +18,13 @@ import re, md5
 from worker_daemon import Daemon
 from worker_daemon import getip
 
-#from pybloomfilter import BloomFilter
 from Error import Error
 
 monkey.patch_all(thread=False)
 
 class Crawler:
 
-    def __init__(self, done_que):
+    def __init__(self ):
 
         self.showpercounts = 10
         self.timeout = 5
@@ -35,7 +33,8 @@ class Crawler:
         self.quit = False
 
         self.run_que = RedisQueueConnection('running').conn
-        self.done_que = done_que
+        self.doneque = RedisQueueConnection('robots').conn
+        self.tempque = Queue()
         self.tasks = []
         self.done = 1
 
@@ -52,6 +51,13 @@ class Crawler:
         self.totaldownsize = 0
         
         self.ip = getip()
+        self.headers = {
+                    'Accept-Language':'zh-CN,zh;q=0.8,zh-TW;q=0.6',
+                    'Accept-Encoding':'gzip,deflate',
+                    'Connection':'close',
+                    'User-Agent':'Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2228.0 Safari/537.36'
+                }
+
 
     #callback function when greenlet of httpget run done
     def cb_httpget(self, data = None):
@@ -64,12 +70,16 @@ class Crawler:
             self.handle_error(err,seed)
             return
 
-        data={'seed':seed,'headers':headers,'content':content}
+        if len(content) <= 0:
+            return
         
+        self.done += 1        
+        data={'seed':seed,'headers':headers,'content':content}
+       
+        #content is robots.txt, normally it's pure text 
         dat = cPickle.dumps(data)
-        self.done_que.put_nowait(dat)
-
-        #print "done", seed
+        self.tempque.put(dat)
+        
         if self.done % self.showpercounts == 0:
             self.out(seed)
 
@@ -78,9 +88,7 @@ class Crawler:
 
         spendtime = time() - self.starttime
         spendtime = 1 if spendtime == 0 else spendtime
-        nowh = str(int(spendtime)/3600)+":" if spendtime>3600 else ""
-        now = "%s%02d:%02d" % (nowh, spendtime%3600/60, spendtime%60 )
-        print "\n%s\t%s D:%-4d R:%-7d [QPS: %.2f  %.2f]  %s" % (self.ip, now, (self.done), self.run_que.qsize(), \
+        print "\n%s D:%-4d R:%-7d [QPS: %.2f  %.2f]  %s" % (self.ip, self.done, self.run_que.qsize(), \
             self.done/spendtime, self.done/self.totalnettime , str(self.err) )
     
     
@@ -90,19 +98,17 @@ class Crawler:
             try:
                 if self.run_que.qsize() == 0:
                     print "run que empty"
-                    sleep(10)
-                    continue
+                    return
+
                 url = self.run_que.get()
-                #self.down_pool.apply_cb(self.httpget, (url,), callback=self.cb_httpget)
-                # spawn is more fast?
                 self.down_pool.spawn(self.httpget, url)
-                self.done += 1
             except KeyboardInterrupt:
                 print "Crawler recv quit singal"
                 self.quit = True
 
         self.down_pool.join()
         print "Crawler over, quit"
+
 
     def handle_error(self,e,url):
        
@@ -136,23 +142,17 @@ class Crawler:
         con = ""
         e = ""
         res_headers = ""
-        headers = {
-                    'Accept-Language':'zh-CN,zh;q=0.8,zh-TW;q=0.6',
-                    'Accept-Encoding':'gzip,deflate',
-                    'Connection':'close',
-                    'User-Agent':'Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2228.0 Safari/537.36'
-                }
-
 
         res = None
         done = False
         try:
-            with gevent.Timeout(6, False) as timeout:
-                #req.max_redirects = 2
-                res = requests.get(url, headers = headers )
-                con = res.content
+            with gevent.Timeout(5, False) as timeout:
+                url = url + '/robots.txt'
+                res = requests.get(url, headers = self.headers )
+                if res.status_code == 200:
+                    con = res.content
+                    done = True
                 res.close()
-                done = True
         except KeyboardInterrupt:
                 raise
         except Exception as e:
@@ -173,22 +173,27 @@ class Crawler:
         self.cb_httpget(data)
         #return url, e, res.headers, con
 
+def daemon(tempque, doneque):
+    while True:
+        if not tempque.empty():
+            dat = tempque.get()
+            doneque.put(dat) 
+        else:
+            sleep(1)
+
     
 def main():
-    
-    #queue for crawler to put the downloaded sites and daemon to extract urls
-    done_que = Queue() 
-    worker_daemon = Daemon(done_que)    
-    worker_crawler = Crawler(done_que)
+   
+    try: 
+        worker_crawler = Crawler()
 
-    try:
-        pd = Process(target=worker_daemon.run)
-        pc = Process(target=worker_crawler.run)
-        pd.start()
-        pc.start() 
-        
-        pd.join()
-        pc.join()
+        p = Process(target=daemon, args=(worker_crawler.tempque, worker_crawler.doneque))
+        p.start()
+
+        #queue for crawler to put the downloaded sites and daemon to extract urls
+        worker_crawler = Crawler()
+        worker_crawler.run()
+
     except KeyboardInterrupt:
         print "Ctrl+C"
         worker_crawler.quit = True
