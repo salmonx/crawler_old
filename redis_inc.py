@@ -37,10 +37,10 @@ class RedisConnection(object):
 
     def __init__(self, db='test'):
         conf = RedisConfig() 
-        self.conn = redis.Redis(host=conf.host, password=conf.password, db=conf.dbd[db])
+        self.conn = redis.Redis(host=conf.host1, password=conf.password, db=conf.dbd[db])
 
 class RedisQueueConnection(object):
     
     def __init__(self, db='test'):
         conf = RedisConfig()
-        self.conn = RedisQueue(name=db, host=conf.host, password=conf.password, db=conf.dbd[db])
+        self.conn = RedisQueue(name=db, host=conf.host1, password=conf.password, db=conf.dbd[db])

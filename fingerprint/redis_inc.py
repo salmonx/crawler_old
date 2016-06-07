@@ -25,6 +25,10 @@ class RedisConfig():
         
         # cms fingerprint
         self.dbd['cms'] = 5
+
+        # robots.txt to check cms
+        self.dbd['robots'] = 5
+
         self.dbd['test'] = 9
         
  
@@ -33,7 +37,7 @@ class RedisConnection(object):
 
     def __init__(self, db='test'):
         conf = RedisConfig() 
-        self.conn = redis.Redis(host=conf.host, password=conf.password, db=conf.dbd[db])
+        self.conn = redis.Redis(host=conf.host1, password=conf.password, db=conf.dbd[db])
 
 class RedisQueueConnection(object):
     

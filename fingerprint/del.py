@@ -1,29 +1,25 @@
 
+from mysql_inc import cur, conn
 
 
+urlip = list()
+
+for line in urlip:
+    items = line.split()
+    if len(items) != 0:
+        print line
 
 
+print "done"
+for line in urlip:
+    items = line.split()
+    url, ip = items
+    
+    icmd = "update cms set ip=%s where url=%s"
+    cur.execute(icmd, (ip, url))
+    break 
+conn.commit()
+ 
 
 
-f = open('rexec_log.txt')
-of = open('cms.txt','w')
-s = set()
-sl = list()
-for l in f:
-    l = l.strip()
-    if l:
-        if not l.startswith('http://') and l.find('http://') > 0:
-            sl.append(l)
-            s.add(l)
-            #print l
-
-
-
-print len(s)
-print len(sl)
-
-for cms in s:
-    of.write(cms + '\n')
-
-of.close()
 

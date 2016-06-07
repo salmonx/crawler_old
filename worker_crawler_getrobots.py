@@ -10,10 +10,12 @@ from gevent.pool import Pool
 from gevent import monkey
 
 from multiprocessing import Process, Queue
+from threading import Thread
+
 from redis_inc import RedisQueueConnection
 import cPickle
 from time import time, sleep
-import re, md5
+import re, md5, random
 
 from worker_daemon import Daemon
 from worker_daemon import getip
@@ -21,34 +23,34 @@ from worker_daemon import getip
 from Error import Error
 
 monkey.patch_all(thread=False)
+#monkey.patch_all()
 
 class Crawler:
 
     def __init__(self ):
 
         self.showpercounts = 10
-        self.timeout = 5
-        self.starttime = time()
+        self.timeout = 20
 
-        self.quit = False
+        self.poolsize = 100
+        self.down_pool = Pool(size=self.poolsize)
 
         self.run_que = RedisQueueConnection('running').conn
         self.doneque = RedisQueueConnection('robots').conn
         self.tempque = Queue()
-        self.tasks = []
         self.done = 1
+        self.sent = 0
+        self.quit = False
 
-        self.errdone = set()
         self.err = Error()
         self.https_enable = 0 
 
         self.httpget = self.httpget_requests # down method self.httpget_requests | httpget_curl
 
-        self.poolsize = 20
-        self.down_pool = Pool(size=self.poolsize)
 
         self.totalnettime = 0
         self.totaldownsize = 0
+        self.starttime = time()
         
         self.ip = getip()
         self.headers = {
@@ -61,7 +63,6 @@ class Crawler:
 
     #callback function when greenlet of httpget run done
     def cb_httpget(self, data = None):
-
         if not data:
             return
         seed, err, headers, content = data
@@ -69,17 +70,15 @@ class Crawler:
         if err:
             self.handle_error(err,seed)
             return
-
         if len(content) <= 0:
             return
         
-        self.done += 1        
         data={'seed':seed,'headers':headers,'content':content}
        
         #content is robots.txt, normally it's pure text 
         dat = cPickle.dumps(data)
         self.tempque.put(dat)
-        
+        self.done += 1 
         if self.done % self.showpercounts == 0:
             self.out(seed)
 
@@ -88,7 +87,7 @@ class Crawler:
 
         spendtime = time() - self.starttime
         spendtime = 1 if spendtime == 0 else spendtime
-        print "\n%s D:%-4d R:%-7d [QPS: %.2f  %.2f]  %s" % (self.ip, self.done, self.run_que.qsize(), \
+        print "\n%s D:%-4d  DT: %4d R:%-7d [QPS: %.2f  %.2f]  %s" % (self.ip, self.done,self.doneque.qsize(), self.run_que.qsize(), \
             self.done/spendtime, self.done/self.totalnettime , str(self.err) )
     
     
@@ -98,10 +97,11 @@ class Crawler:
             try:
                 if self.run_que.qsize() == 0:
                     print "run que empty"
-                    return
+                    sleep(60)
 
                 url = self.run_que.get()
                 self.down_pool.spawn(self.httpget, url)
+                self.sent += 1
             except KeyboardInterrupt:
                 print "Crawler recv quit singal"
                 self.quit = True
@@ -146,7 +146,7 @@ class Crawler:
         res = None
         done = False
         try:
-            with gevent.Timeout(5, False) as timeout:
+            with gevent.Timeout(self.timeout, False) as timeout:
                 url = url + '/robots.txt'
                 res = requests.get(url, headers = self.headers )
                 if res.status_code == 200:
@@ -160,39 +160,73 @@ class Crawler:
             if res:
                 res.close()
 
-            #as for spawn, no callback , we should call by ourself
             data = (url, e, None, None)
-            #return url,e,None,None
 
         et = time()
         self.totalnettime += (et-st)
         #spawn
         if done:
             data = (url, e, res.headers, con)
-            
-        self.cb_httpget(data)
-        #return url, e, res.headers, con
+           
+        #self.cb_httpget(data)
+        if not data:
+            return
+        seed, err, headers, content = data
 
-def daemon(tempque, doneque):
+        if err:
+            self.handle_error(err,seed)
+            return
+        if len(content) <= 0:
+            return
+        
+        data={'seed':seed,'headers':headers,'content':content}
+       
+        #content is robots.txt, normally it's pure text 
+        dat = cPickle.dumps(data)
+        self.tempque.put(dat)
+        self.done += 1 
+        if self.done % self.showpercounts == 0:
+            #self.out(seed)
+            spendtime = time() - self.starttime
+            spendtime = 1 if spendtime == 0 else spendtime
+            print "\n%s D:%-4dDT:%4d R:%-7d [QPS: %.2f  %.2f]  %s" % (self.ip, self.done,self.doneque.qsize(), self.run_que.qsize(), \
+                self.done/spendtime, self.sent/spendtime , str(self.err) )
+        
+
+
+
+def daemon(tempque):
+    st = random.random() + 0.5
+    doneque = RedisQueueConnection('robots').conn
+
     while True:
         if not tempque.empty():
             dat = tempque.get()
-            doneque.put(dat) 
+            doneque.put(dat)
         else:
-            sleep(1)
+            sleep(st)
 
     
 def main():
    
     try: 
+
+
         worker_crawler = Crawler()
 
-        p = Process(target=daemon, args=(worker_crawler.tempque, worker_crawler.doneque))
-        p.start()
-
+        pl = list()
+        pl.append( Thread(target=daemon, args=(worker_crawler.tempque,)) )
+        #p.start()
+    
         #queue for crawler to put the downloaded sites and daemon to extract urls
-        worker_crawler = Crawler()
-        worker_crawler.run()
+        pl.append( Thread(target=worker_crawler.run) )
+        
+        for p in pl:
+            p.start()
+        for p in pl:
+            p.join()
+
+        
 
     except KeyboardInterrupt:
         print "Ctrl+C"

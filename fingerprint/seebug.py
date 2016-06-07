@@ -1,6 +1,7 @@
 import requests
 
 import re,os, pickle
+from mysql_inc import cur, conn
 
 mainurl = "https://www.seebug.org/"
 
@@ -57,7 +58,41 @@ def genlist():
         f.close()
     return bugs
 
-bugs =  genlist()
+#bugs =  genlist()
 
-for k in bugs:
-    print k, bugs[k]
+
+
+def insertdb():
+    ccmd = """
+create table if not exists vuls(
+id int primary key auto_increment,
+cms varchar(256),
+url varchar(256),
+title varchar(1024)
+)"""
+    cur.execute(ccmd)
+    conn.commit()
+
+    icmd = "insert into vuls (cms, url, title) values( %s, %s, %s)"
+    bugs = pickle.loads( open('bugs.db').read() )
+    for k in bugs:
+        cms = k.lower().strip()
+        for bug in bugs[k]:
+            url, title = bug 
+            cur.execute(icmd, (cms, url, title))
+        
+    conn.commit()
+        
+        
+    cur.execute('select count(*) from vuls')
+    print cur.fetchone()
+
+        
+def createindex(table,field):
+    cmd = "create index vuls_cms on vuls(cms)"
+    cur.execute(cmd)
+    conn.commit()
+
+
+#insertdb()
+createindex('vuls','cms')

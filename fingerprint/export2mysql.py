@@ -4,9 +4,11 @@ import cPickle as pickle
 from redis_inc import RedisConnection, RedisQueueConnection
 import  mysql_inc 
 import re
+from pybloomfilter import BloomFilter
 
 conn, cur = mysql_inc.gethandler()
 
+bf = BloomFilter(300000, 0.00001, 'urlip.bin')
 
 def test():
     
@@ -19,6 +21,20 @@ def test():
     cur.execute(cmd)
     for l in cur.fetchall():
         print l
+
+
+def getcontent(con):
+    try:
+        con = con.decode('utf8')
+    except:
+        try:
+            con = con.decode('gbk')
+        except:
+            pass
+
+    con = con.replace('\r','\n').replace('\n\n','\n').strip()
+
+    return con.lower()
 
 
     
@@ -141,13 +157,114 @@ def exturls():
         f.write(url + '\n')
     
     f.close()
+    
+
+def insertcmsfromrobots():
+    icmd = "insert into cms ( url, cms, server, powered ) values (%s,%s,%s,%s)"
+    test = RedisConnection('test').conn
+    print test.dbsize()
+    keys = test.keys() 
+    for seed in keys[7700:]:
+        # forget to serialize
+        try:
+            data = test[seed].split(',')
+            cms = data[0].lstrip('(').replace('\'','').strip()
+            server = data[1].replace("'",'').strip()
+            powered = data[2].rstrip(')').replace("'", '').strip()
+            print seed, cms, server, powered 
+            cur.execute(icmd ,  (seed, cms, server, powered))
+        except:
+            pass
+    print "insert done"
+    conn.commit() 
      
+#when get cms from robots.txt and append to cms, we miss the title and oid of orinal
+#
+
+
+def gettitle(con):
+    title = ""
+    ret = ptitle.findall(con)
+    if ret:
+        title = ret[0].strip()
+
+    return title.encode('utf8')
+
+
+def insertoid():
+    scmd = "select id, url from cms where oid is NULL"
+    socmd = "select id, head from orignal where url='%s'"
+    icmd = "update cms set oid=%s,title=%s where id=%s"
+    cur.execute(scmd)
+    for data in cur.fetchall():
+        cmsid, url = data
+        cur.execute(socmd % (url))
+        ret = cur.fetchone()
+        if ret:
+            oid, head = ret
+            head = getcontent(head)
+            title = gettitle(head)
+            idata = (oid, title, cmsid)
+        
+            cur.execute(icmd, idata)    
+            print cmsid, url, oid, title
+    
+    conn.commit()
+
+
+
+#extract url cmsed to query the ip
+
+def extracturl():
+    cmd = "select url from cms"
+    cur.execute(cmd)
+    for url in cur.fetchall():
+        print url[0]
+   
+#insert into cms the ips of cms
+def insertip():
+    urlip = dict()
+    f = open('urlip.txt').read().strip().split('\n')
+    for ff in f:
+        url , ip = ff.split(' ')
+        url = url.strip()
+        urlip[url] = ip
+        bf.add(url)
+        if not url in bf:
+            print "no", url
+
+    print len(urlip)
+    
+    allurls = set(urlip.keys())
+
+    i = 0
+    scmd = "select id, url from cms where ip is NULL"
+    cur.execute(scmd)
+    for ret in  cur.fetchall():
+        cmsid, url = ret
+        icmd = "update cms set ip=%s where id=%s"
+        if url in allurls:
+            ip = urlip[url]
+            cur.execute(icmd, (ip, cmsid))
+            if i % 10000 == 0:
+                print i, cmsid, ip
+                conn.commit()
+            i += 1
+
+    conn.commit()
+
+
+
+            
 def main():
     #test()
     #extract()
-    org2cms()
+    #org2cms()
     #exturls()
-
+    #insertcmsfromrobots()
+    #insertoid()
+    #extracturl()
+    insertip()
 
 if __name__ == '__main__':
     main()
